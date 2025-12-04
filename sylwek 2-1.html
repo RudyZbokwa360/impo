@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Imposter — Kategorie</title>
+  <style>
+    body{font-family:Arial;margin:0;padding:0;background:#0d1117;color:#e6eef6}
+    .wrap{max-width:600px;margin:0 auto;padding:20px}
+    .card{background:#161b22;padding:16px;border-radius:10px;margin-top:20px}
+    button{padding:12px 18px;border:none;border-radius:8px;background:#58a6ff;color:#000;font-weight:700;cursor:pointer;width:100%}
+    input{padding:8px;border-radius:6px;border:none;width:100%}
+    .center{text-align:center}
+    .catBtn{
+      padding:20px;
+      background:#222;
+      border-radius:10px;
+      text-align:center;
+      cursor:pointer;
+      font-weight:700;
+      border:2px solid #333;
+      user-select:none;
+      transition:0.2s;
+    }
+    .catBtn:hover{
+      background:#333;
+    }
+    .catSelected{
+      background:#444 !important;
+      border-color:#58a6ff;
+    }
+    .names input{margin-top:6px}
+    #hideBtn{margin-top:10px;display:none;}
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>inpostor by nie ogladac reklam</h1>
+
+  <div class="card" id="setup">
+    <label>Liczba graczy</label>
+    <input id="playersCount" type="number" min="3" max="20" value="5" />
+
+    <button style="margin-top:10px" id="genInputs">Utwórz pola na imiona</button>
+    <div id="nameInputs" class="names"></div>
+
+    <label style="margin-top:15px">Impostorzy</label>
+    <input id="impostorCount" type="number" min="1" max="5" value="1" />
+
+    <label style="margin-top:15px;">Wybierz kategorię</label>
+    <div id="categoryBox" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
+      <div class="catBtn" data-cat="filmy">Filmy</div>
+      <div class="catBtn" data-cat="jedzenie">Jedzenie</div>
+      <div class="catBtn" data-cat="zwierzeta">Zwierzęta</div>
+      <div class="catBtn" data-cat="sport">Sport</div>
+      <div class="catBtn" data-cat="kraje">Kraje</div>
+    </div>
+
+    <input id="category" type="hidden" value="filmy">
+
+    <button style="margin-top:20px" id="startBtn">Start gry</button>
+  </div>
+
+  <div class="card" id="reveal" style="display:none">
+    <h3 id="turnInfo">Gracz 1 — sprawdź swoją rolę</h3>
+
+    <div id="secret" style="display:none;margin-top:10px;background:#0d1117;padding:12px;border-radius:8px"></div>
+
+    <div class="center" style="margin-top:14px">
+      <button id="showRoleBtn">Pokaż rolę</button>
+      <button id="hideBtn">Zasłoń ekran</button>
+      <button id="nextPlayerBtn" style="display:none">Następny gracz</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let players = [];
+let turn = 0;
+let crewWord = "";
+
+// Kategorie słów
+const WORDS = {
+  filmy: ["Avatar","Matrix","Shrek","Wilk z Wall Street","Titanic","Gladiator"],
+  jedzenie: ["Pizza","Makaron","Burger","Czekolada","Ramen","Tort"],
+  zwierzeta: ["Lew","Słoń","Tygrys","Żyrafa","Krokodyl","Pies"],
+  sport: ["Piłka nożna","Koszykówka","Tenis","Boks","Siatkówka","Hokej"],
+  kraje: ["Polska","Hiszpania","Japonia","Egipt","Australia","Niemcy"]
+};
+
+// Podpowiedzi dla Impostora
+const HINTS = {
+  "Avatar": "niebieskie stworki",
+  "Matrix": "tabletki",
+  "Shrek": "zielone",
+  "Wilk z Wall Street": "kamblerka",
+  "Titanic": "namaluj mnie jak jedna z swoich francuskich prostytutek",
+  "Gladiator": "Starożytny Rzym",
+  
+  "Pizza": "koło",
+  "Makaron": "soli sie",
+  "Burger": "mieso salata",
+  "Czekolada": "kakao",
+  "Ramen": "Japonia",
+  "Tort": "świeczki",
+
+  "Lew": "grzywa",
+  "Słoń": "duzy nos duzy fiut",
+  "Tygrys": "Pasiasty",
+  "Żyrafa": "Długi szyja",
+  "Krokodyl": "zielony",
+  "Pies": "Najlepszy przyjaciel człowieka",
+
+  "Piłka nożna": "11",
+  "Koszykówka": "czarni",
+  "Tenis": "penis",
+  "Boks": "ring",
+  "Siatkówka": "hubert",
+  "Hokej": "kij",
+
+  "Polska": "Kraj w Europie Środkowej",
+  "Hiszpania": "pozycja seksualna",
+  "Japonia": "Kraj kwitnącej wiśni",
+  "Egipt": "piasek",
+  "Australia": "Kraj kangurów",
+  "Niemcy": "reka"
+};
+
+// Elementy
+const startBtn = document.getElementById('startBtn');
+const reveal = document.getElementById('reveal');
+const turnInfo = document.getElementById('turnInfo');
+const secret = document.getElementById('secret');
+const showRoleBtn = document.getElementById('showRoleBtn');
+const hideBtn = document.getElementById('hideBtn');
+const nextPlayerBtn = document.getElementById('nextPlayerBtn');
+const genInputs = document.getElementById('genInputs');
+const nameInputs = document.getElementById('nameInputs');
+
+// Wybór kategorii
+document.querySelectorAll(".catBtn").forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll(".catBtn").forEach(b => b.classList.remove("catSelected"));
+    btn.classList.add("catSelected");
+    document.getElementById("category").value = btn.dataset.cat;
+  };
+});
+
+// Pola na imiona
+genInputs.onclick = () => {
+  const n = Number(document.getElementById('playersCount').value);
+  nameInputs.innerHTML = "";
+  for (let i = 1; i <= n; i++){
+    const inp = document.createElement('input');
+    inp.placeholder = `Imię gracza ${i}`;
+    inp.id = `playerName${i}`;
+    nameInputs.appendChild(inp);
+  }
+};
+
+// Start gry
+startBtn.onclick = () => {
+  const n = Number(document.getElementById('playersCount').value);
+  const category = document.getElementById('category').value;
+
+  players = [];
+  for (let i = 1; i <= n; i++){
+    const nameField = document.getElementById(`playerName${i}`);
+    const name = nameField && nameField.value.trim() !== "" ? nameField.value : `Gracz ${i}`;
+    players.push({id:i, name:name, role:'crew'});
+  }
+
+  const words = [...WORDS[category]];
+  words.sort(() => Math.random() - 0.5);
+  crewWord = words[0];
+
+  randomizeRoles();
+
+  turn = 0;
+  document.getElementById('setup').style.display = 'none';
+  reveal.style.display = 'block';
+  updateTurn();
+};
+
+// Losowanie impostorów - teraz w pełni losowo
+function randomizeRoles(){
+  const imp = Number(document.getElementById('impostorCount').value);
+  
+  // Wszyscy crew
+  players.forEach(p => p.role = 'crew');
+  
+  // Losowe unikalne indeksy impostorów
+  const indices = [];
+  while(indices.length < imp){
+    const rand = Math.floor(Math.random() * players.length);
+    if(!indices.includes(rand)) indices.push(rand);
+  }
+  
+  // Przypisz role
+  indices.forEach(i => players[i].role = 'imp');
+}
+
+// Aktualizacja tury
+function updateTurn(){
+  turnInfo.textContent = `${players[turn].name} — sprawdź swoją rolę`;
+  secret.style.display='none';
+  showRoleBtn.style.display='inline-block';
+  hideBtn.style.display='none';
+  nextPlayerBtn.style.display='none';
+}
+
+// Pokazywanie roli
+showRoleBtn.onclick = () => {
+  const p = players[turn];
+
+  secret.style.display='block';
+  if(p.role === 'imp'){
+    const hint = HINTS[crewWord];
+    secret.innerHTML = `<b>IMPOSTOR</b><br>` + (hint ? hint : "Brak podpowiedzi");
+  } else {
+    secret.innerHTML = `<b>CREWMATE</b><br>` + crewWord;
+  }
+
+  showRoleBtn.style.display='none';
+  hideBtn.style.display='inline-block';
+};
+
+// Zasłoń ekran
+hideBtn.onclick = () => {
+  secret.style.display='none';
+  hideBtn.style.display='none';
+  nextPlayerBtn.style.display='inline-block';
+};
+
+// Kolejny gracz
+nextPlayerBtn.onclick = () => {
+  turn++;
+  if(turn >= players.length){
+    reveal.innerHTML = `
+      <h2 class="center">Wszyscy gracze sprawdzili role!</h2>
+      <div class="center" style="margin-top:20px">
+        <button id="newRoundBtn">Nowa runda</button>
+      </div>
+    `;
+    document.getElementById("newRoundBtn").onclick = () => location.reload();
+    return;
+  }
+  updateTurn();
+};
+</script>
+
+</body>
+</html>
